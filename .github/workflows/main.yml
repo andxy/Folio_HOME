@@ -21,27 +21,48 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Java 17
+      - name: Configure Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Configure Android SDK
+      - name: Install Android command-line tools
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
+          SDK="$RUNNER_TEMP/android-sdk"
+          mkdir -p "$SDK/cmdline-tools"
+          curl -fL --retry 3 \
+            https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
+            -o "$RUNNER_TEMP/cmdline-tools.zip"
+          unzip -q "$RUNNER_TEMP/cmdline-tools.zip" \
+            -d "$RUNNER_TEMP/android-tools"
+          mv "$RUNNER_TEMP/android-tools/cmdline-tools" \
+            "$SDK/cmdline-tools/latest"
+
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$SDK/platform-tools" >> "$GITHUB_PATH"
+
+      - name: Install Android SDK 36
+        run: |
           yes | sdkmanager --licenses || true
           sdkmanager --install \
             "platforms;android-36" \
-            "build-tools;36.0.0"
+            "build-tools;36.0.0" \
+            "platform-tools"
+          sdkmanager --list_installed
 
-      - name: Install Gradle 8.13
+      - name: Configure Gradle 8.13
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
 
-      - name: Build Debug APK
-        run: gradle --no-daemon --stacktrace :app:assembleDebug
+      - name: Build debug APK
+        run: |
+          java -version
+          gradle --version
+          gradle --no-daemon --stacktrace :app:assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -49,3 +70,4 @@ jobs:
           name: FolioHome-debug
           path: Folio_Home_v0_1_build_ready/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
